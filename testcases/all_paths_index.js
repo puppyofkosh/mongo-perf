@@ -53,13 +53,20 @@ function addTest(options) {
     });
 }
 
-/*
- * 200 arbitrary field names
- */
-var FIELD_NAMES = [];
-for (var i = 0; i < 200; i++) {
-    FIELD_NAMES.push("field-" + i);
+function getNFieldNames(n) {
+    var fieldNames = [];
+    for (var i = 0; i < n; i++) {
+        fieldNames.push("field-" + i);
+    }
+    return fieldNames;
 }
+
+/*
+ * Arbitrary field names.
+ */
+var FIELD_NAMES = getNFieldNames(200);
+var FIELD_NAMES_32 = getNFieldNames(32);
+var FIELD_NAMES_16 = getNFieldNames(16);
 
 /*
  * Constant used as a parameter for test cases.
@@ -77,13 +84,6 @@ var setNFields = function setNFields(object, fieldNamesArray, offset, values, n)
     }
     return object;
 };
-
-/*
- * Add NUMBER_FOR_RANGE values to an object.
- */
-function addNumberForRangeValuesTopLevel(object, fieldNamesArray, offset, values) {
-    return setNFields(object, fieldNamesArray, offset, values, NUMBER_FOR_RANGE);
-}
 
 /*
  * Helper function that has been exposed to allow for the use of the algebra later to compute
@@ -172,6 +172,14 @@ function insertDocumentsWithUniqueLeaves(collection) {
     collection.insert(docs);
 }
 
+function getSingleFieldDoc(seed) {
+    return {a: seed, b: seed};
+}
+
+function getTwoFieldDoc(seed) {
+    return {a: seed};
+}
+
 /*
  * Creates a collection of documents with values all in a two fields at the top level.
  * Since the standrad tests require that there be two fields (because it requires a compound index
@@ -181,9 +189,20 @@ function insertTwoFieldsDocs(collection) {
     collection.drop();
     var docs = [];
     for (var i = 0; i < 4800; i++) {
-        docs.push({a: i, b: i});
+        docs.push(getTwoFieldDoc(i));
     }
     assert.commandWorked(collection.insert(docs));
+}
+
+function getDocGeneratorForTopLevelFields(fieldNameArr, nTopLevelFields) {
+    function docGenerator(seed) {
+        return setNFields({}, fieldNameArr, seed, [seed], nTopLevelFields);
+    }
+    return docGenerator;
+}
+
+function getDocWithMultipleTopLevelFields(seed) {
+    return setNFields({}, FIELD_NAMES_16, seed, [seed], NUMBER_FOR_RANGE);
 }
 
 /*
@@ -192,11 +211,9 @@ function insertTwoFieldsDocs(collection) {
  */
 function insertMultipleFieldsDocs(collection) {
     collection.drop();
-    var docs = [];
     for (var i = 0; i < 4800; i++) {
-        docs.push(addNumberForRangeValuesTopLevel({}, FIELD_NAMES, i, [i]));
+        assert.commandWorked(collection.insert(getDocWithMultipleTopLevelFields(i)));
     }
-    assert.commandWorked(collection.insert(docs));
 }
 
 /*
@@ -220,29 +237,57 @@ function insertDeeplyNestedDocs(collection) {
 
 function setupDocumentsWithUniqueLeavesIndexed(collection) {
     insertDocumentsWithUniqueLeaves(collection);
-    collection.createIndex({"$**": 1});
+    assert.commandWorked(collection.createIndex({"$**": 1}));
 }
 
-function setupTestTwoFieldsDocsIndexed(collection) {
-    insertTwoFieldsDocs(collection);
-    collection.createIndex({"$**": 1});
+function getSetupFunctionForTargetedIndex(fieldsToIndex, insertFunction) {
+    function setupTest(collection) {
+        if (insertFunction) {
+            // insertFunction may be null, (for a write-path test, for example), in which case we
+            // do nothing.
+            insertFunction(collection);
+        }
+
+        // Instead of creating an allPaths index, creating a normal index for each top-level
+        // field used. This way, the same number of index entries are created, regardless of
+        // whether we use an allPaths index, or a targeted index.
+        for (var i = 0; i < fieldsToIndex.length; i++) {
+            var fieldName = fieldsToIndex[i];
+            assert.commandWorked(
+                collection.createIndex(setDottedFieldToValue({}, fieldsToIndex[i], 1)));
+        }
+    }
+    return setupTest;
 }
 
-function setupTestMultipleFieldsDocsIndexed(collection) {
-    insertMultipleFieldsDocs(collection);
-    collection.createIndex({"$**": 1});
+function getSetupFunctionWithAllPathsIndex(fieldsToIndex, insertFunction) {
+    function setupTest(collection) {
+        if (insertFunction) {
+            // insertFunction may be null, (for a write-path test, for example), in which case we
+            // do nothing.
+            insertFunction(collection);
+        }
+
+        var proj = {};
+        for (var i = 0; i < fieldsToIndex.length; i++) {
+            proj[fieldsToIndex] = 1;
+        }
+        assert.commandWorked(collection.createIndex({"$**": 1}, {starPathsTempName: proj}));
+    }
+
+    return setupTest;
 }
 
 function setupDeeplyNestedDocsIndexed(collection) {
     insertDeeplyNestedDocs(collection);
-    collection.createIndex({"$**": 1});
+    assert.commandWorked(collection.createIndex({"$**": 1}));
 }
 
 function setupTestMultipleFieldsDocsAllExcludedIndexed(collection) {
     insertMultipleFieldsDocs(collection);
-    // There are no documents with a field "nonexistent" therefore this ensures that no part of a
-    // docuemnt is indexed.
-    collection.createIndex({"nonexistent.$**": 1});
+    // There are no documents with a field "nonexistent" therefore this ensures
+    // that no part of a document is indexed.
+    assert.commandWorked(collection.createIndex({"nonexistent.$**": 1}));
 }
 
 var insertTags = ["insert"];
@@ -270,23 +315,22 @@ function makeInsertTest(name, pre, doc) {
  * range queries respectively.
  * TODO: SERVER-36214 make compound & range queries so that these fields are used.
  */
-function makeStandardTests(name, preIndexed, primaryField, secondaryField, lowerRange, upperRange) {
+function makeStandardTests(
+    name, preIndexed, documentGenerator, primaryField, secondaryField, lowerRange, upperRange) {
     makeInsertTest(name, preIndexed, setDottedFieldToValue({}, primaryField, upperRange));
 }
 
-makeStandardTests("TwoFields",
-                  setupTestTwoFieldsDocsIndexed,
-                  "a",
-                  "b",
-                  INDEX_FOR_QUERIES - NUMBER_FOR_RANGE,
-                  INDEX_FOR_QUERIES);
+function makeInsertTestForDocType(name, pre, documentGenerator) {
+    var opsList = [];
+    for (var i = 0; i < 1000; i++) {
+        opsList.push({op: "insert", doc: documentGenerator(i)});
+    }
+    addTest({type: "Insert", name: name + ".InsertDoc", pre: pre, ops: opsList, tags: insertTags});
+}
 
-makeStandardTests("MultipleFields",
-                  setupTestMultipleFieldsDocsIndexed,
-                  FIELD_NAMES[INDEX_FOR_QUERIES % FIELD_NAMES.length],
-                  FIELD_NAMES[(INDEX_FOR_QUERIES + 1) % FIELD_NAMES.length],
-                  INDEX_FOR_QUERIES - NUMBER_FOR_RANGE,
-                  INDEX_FOR_QUERIES);
+function makeWriteTests(name, preIndexed, documentGenerator) {
+    makeInsertTest(name, preIndexed, documentGenerator(INDEX_FOR_QUERIES));
+}
 
 makeStandardTests("MultipleFieldsAllExcluded",
                   setupTestMultipleFieldsDocsAllExcludedIndexed,
@@ -328,3 +372,21 @@ makeStandardTests(
     getPathToJthDeeplyNestedField(FIELD_NAMES, INDEX_FOR_QUERIES, NUMBER_FOR_RANGE - 1, 0, 1),
     110,
     INDEX_FOR_QUERIES);
+
+// Comparison tests which use a standard index.
+
+function makeComparisonWriteTest(name, fieldsToIndex, documentGenerator) {
+    makeInsertTestForDocType(name + ".AllPathsIndex",
+                             getSetupFunctionWithAllPathsIndex(fieldsToIndex),
+                             documentGenerator);
+    makeInsertTestForDocType(name + ".StandardIndex",
+                             getSetupFunctionForTargetedIndex(fieldsToIndex),
+                             documentGenerator);
+}
+
+makeComparisonWriteTest("SingleField", ["a"], getSingleFieldDoc);
+makeComparisonWriteTest("TwoFields", ["a", "b"], getTwoFieldDoc);
+makeComparisonWriteTest(
+    "MultipleFields16", FIELD_NAMES_16, getDocGeneratorForTopLevelFields(FIELD_NAMES_16, 16));
+makeComparisonWriteTest(
+    "MultipleFields32", FIELD_NAMES_32, getDocGeneratorForTopLevelFields(FIELD_NAMES_32, 32));

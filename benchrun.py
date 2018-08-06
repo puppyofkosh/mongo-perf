@@ -226,6 +226,7 @@ def main():
     with NamedTemporaryFile(suffix='.js') as js_file:
         js_file.write(commands)
         js_file.flush()
+        print("commands are " + commands + "\n\ndone");
 
         # Open a mongo shell subprocess and load necessary files.
         mongo_proc = Popen([args.shellpath, "--norc", "--quiet", js_file.name,
@@ -239,6 +240,7 @@ def main():
         line_results = ""
         for line in iter(mongo_proc.stdout.readline, ''):
             line = line.strip()
+            print line
             if line == "@@@START@@@":
                 readout = True
                 getting_results = False
@@ -258,6 +260,7 @@ def main():
                 line_results += line
 
     print("Finished Testing.")
+    print("results were " + line_results);
     results_parsed = json.loads(line_results)
     if args.outfile:
         out = open(args.outfile, 'w')
