@@ -65,7 +65,10 @@ function getNFieldNames(n) {
  * Arbitrary field names.
  */
 var FIELD_NAMES = getNFieldNames(200);
-var FIELD_NAMES_32 = getNFieldNames(32);
+var FIELD_NAMES_1 = ["a"];
+var FIELD_NAMES_2 = ["a", "b"];
+var FIELD_NAMES_4 = getNFieldNames(4);
+var FIELD_NAMES_8 = getNFieldNames(8);
 var FIELD_NAMES_16 = getNFieldNames(16);
 
 /*
@@ -172,31 +175,9 @@ function insertDocumentsWithUniqueLeaves(collection) {
     collection.insert(docs);
 }
 
-function getSingleFieldDoc(seed) {
-    return {a: seed, b: seed};
-}
-
-function getTwoFieldDoc(seed) {
-    return {a: seed};
-}
-
-/*
- * Creates a collection of documents with values all in a two fields at the top level.
- * Since the standrad tests require that there be two fields (because it requires a compound index
- * query).
- */
-function insertTwoFieldsDocs(collection) {
-    collection.drop();
-    var docs = [];
-    for (var i = 0; i < 4800; i++) {
-        docs.push(getTwoFieldDoc(i));
-    }
-    assert.commandWorked(collection.insert(docs));
-}
-
-function getDocGeneratorForTopLevelFields(fieldNameArr, nTopLevelFields) {
+function getDocGeneratorForTopLevelFields(fieldNameArr) {
     function docGenerator(seed) {
-        return setNFields({}, fieldNameArr, seed, [seed], nTopLevelFields);
+        return setNFields({}, fieldNameArr, 0, [seed], fieldNameArr.length);
     }
     return docGenerator;
 }
@@ -253,8 +234,8 @@ function getSetupFunctionForTargetedIndex(fieldsToIndex, insertFunction) {
         // whether we use an allPaths index, or a targeted index.
         for (var i = 0; i < fieldsToIndex.length; i++) {
             var fieldName = fieldsToIndex[i];
-            assert.commandWorked(
-                collection.createIndex(setDottedFieldToValue({}, fieldsToIndex[i], 1)));
+            assert.commandWorked(collection.createIndex(
+                setDottedFieldToValue({}, fieldsToIndex[i], 1), {sparse: true}));
         }
     }
     return setupTest;
@@ -270,7 +251,7 @@ function getSetupFunctionWithAllPathsIndex(fieldsToIndex, insertFunction) {
 
         var proj = {};
         for (var i = 0; i < fieldsToIndex.length; i++) {
-            proj[fieldsToIndex] = 1;
+            proj[fieldsToIndex[i]] = 1;
         }
         assert.commandWorked(collection.createIndex({"$**": 1}, {starPathsTempName: proj}));
     }
@@ -384,9 +365,13 @@ function makeComparisonWriteTest(name, fieldsToIndex, documentGenerator) {
                              documentGenerator);
 }
 
-makeComparisonWriteTest("SingleField", ["a"], getSingleFieldDoc);
-makeComparisonWriteTest("TwoFields", ["a", "b"], getTwoFieldDoc);
 makeComparisonWriteTest(
-    "MultipleFields16", FIELD_NAMES_16, getDocGeneratorForTopLevelFields(FIELD_NAMES_16, 16));
+    "SingleField", FIELD_NAMES_1, getDocGeneratorForTopLevelFields(FIELD_NAMES_1));
 makeComparisonWriteTest(
-    "MultipleFields32", FIELD_NAMES_32, getDocGeneratorForTopLevelFields(FIELD_NAMES_32, 32));
+    "TwoFields", FIELD_NAMES_2, getDocGeneratorForTopLevelFields(FIELD_NAMES_2));
+makeComparisonWriteTest(
+    "FourFields", FIELD_NAMES_4, getDocGeneratorForTopLevelFields(FIELD_NAMES_4));
+makeComparisonWriteTest(
+    "8Fields", FIELD_NAMES_8, getDocGeneratorForTopLevelFields(FIELD_NAMES_8));
+makeComparisonWriteTest(
+    "16Fields", FIELD_NAMES_16, getDocGeneratorForTopLevelFields(FIELD_NAMES_16));
