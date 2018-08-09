@@ -170,28 +170,14 @@ function insertDocumentsWithUniqueLeaves(collection) {
     collection.insert(docs);
 }
 
-function getDocGeneratorForTopLevelFields(fieldNameArr) {
-    function docGenerator(seed) {
-        return setNFields({}, fieldNameArr, 0, [seed], fieldNameArr.length);
-    }
-    return docGenerator;
-}
-
-function getDocWithMultipleTopLevelFields(seed) {
-    return setNFields({}, FIELD_NAMES, seed, [seed], NUMBER_FOR_RANGE);
-}
-
-/*
- * Creates a collection of documents with NUMBER_FOR_RANGE values at the top
- * level.
+/**
+ * Returns a function, that when called will produce a document with top level fields
+ * from 'fieldNameArr'.
  */
-function insertMultipleFieldsDocs(collection) {
-    collection.drop();
-    var docs = [];
-    for (var i = 0; i < 4800; i++) {
-        docs.push(getDocWithMultipleTopLevelFields(i));
-    }
-    assert.commandWorked(collection.insert(docs));
+function getDocGeneratorForTopLevelFields(fieldNameArr) {
+    return function(seed) {
+        return setNFields({}, fieldNameArr, 0, [seed], fieldNameArr.length);
+    };
 }
 
 /*
@@ -219,7 +205,7 @@ function setupDocumentsWithUniqueLeavesIndexed(collection) {
 }
 
 function getSetupFunctionForTargetedIndex(fieldsToIndex) {
-    function setupTest(collection) {
+    return function(collection) {
         collection.drop();
         // Instead of creating an allPaths index, creating a normal index for each top-level
         // field used. This way, the same number of index entries are created, regardless of
@@ -229,33 +215,23 @@ function getSetupFunctionForTargetedIndex(fieldsToIndex) {
             assert.commandWorked(collection.createIndex(
                 setDottedFieldToValue({}, fieldsToIndex[i], 1), {sparse: true}));
         }
-    }
-    return setupTest;
+    };
 }
 
 function getSetupFunctionWithAllPathsIndex(fieldsToIndex) {
-    function setupTest(collection) {
+    return function(collection) {
         collection.drop();
         var proj = {};
         for (var i = 0; i < fieldsToIndex.length; i++) {
             proj[fieldsToIndex[i]] = 1;
         }
         assert.commandWorked(collection.createIndex({"$**": 1}, {starPathsTempName: proj}));
-    }
-
-    return setupTest;
+    };
 }
 
 function setupDeeplyNestedDocsIndexed(collection) {
     insertDeeplyNestedDocs(collection);
     assert.commandWorked(collection.createIndex({"$**": 1}));
-}
-
-function setupTestMultipleFieldsDocsAllExcludedIndexed(collection) {
-    insertMultipleFieldsDocs(collection);
-    // There are no documents with a field "nonexistent" therefore this ensures that no part of a
-    // document is indexed.
-    assert.commandWorked(collection.createIndex({"nonexistent.$**": 1}));
 }
 
 var insertTags = ["insert"];
@@ -295,12 +271,9 @@ function makeInsertTestForDocType(name, pre, documentGenerator) {
     addTest({type: "Insert", name: name + ".InsertDoc", pre: pre, ops: opsList, tags: insertTags});
 }
 
-makeStandardTests("MultipleFieldsAllExcluded",
-                  setupTestMultipleFieldsDocsAllExcludedIndexed,
-                  FIELD_NAMES[INDEX_FOR_QUERIES % FIELD_NAMES.length],
-                  FIELD_NAMES[(INDEX_FOR_QUERIES + 1) % FIELD_NAMES.length],
-                  INDEX_FOR_QUERIES - NUMBER_FOR_RANGE,
-                  INDEX_FOR_QUERIES);
+makeInsertTestForDocType("MultipleFieldsAllExcluded",
+                         getSetupFunctionWithAllPathsIndex(["nonexistent"]),
+                         getDocGeneratorForTopLevelFields(getNFieldNames(16)));
 
 /*
  * To get the primary and secondary fields that have value INDEX_FOR_QUERIES we use the helpers used
@@ -350,7 +323,5 @@ function makeComparisonWriteTest(name, fieldsToIndex, documentGenerator) {
 for (var i = 1; i <= 16; i *= 2) {
     var fieldNameArr = getNFieldNames(i);
     var name = "TopLevelField" + (i > 1 ? "s" : "") + "-" + i;
-    makeComparisonWriteTest(name,
-                            fieldNameArr,
-                            getDocGeneratorForTopLevelFields(fieldNameArr));
+    makeComparisonWriteTest(name, fieldNameArr, getDocGeneratorForTopLevelFields(fieldNameArr));
 }
