@@ -47,7 +47,7 @@ function setDottedFieldToValue(object, path, value) {
 function addTest(options) {
     tests.push({
         name: options.type + ".AllPathsIndex." + options.name,
-        tags: ["all_paths", "regression", "indexed"].concat(options.tags),
+        tags: ["all_paths", "indexed"].concat(options.tags),
         pre: options.pre,
         ops: options.ops
     });
@@ -223,24 +223,37 @@ var kInsertTags = ["insert"];
 /*
  * Make a test that inserts doc.
  */
-function makeInsertTestForDocType(name, pre, documentGenerator) {
+function makeInsertTestForDocType(name, pre, documentGenerator, additionalTags) {
+    if (typeof(additionalTags) === "undefined") {
+        additionalTags = [];
+    }
+
     var opsList = [];
     for (var i = 0; i < 1000; i++) {
         opsList.push({op: "insert", doc: documentGenerator(i)});
     }
-    addTest({type: "Insert", name: name + ".InsertDoc", pre: pre, ops: opsList, tags: kInsertTags});
+    addTest({
+        type: "Insert",
+        name: name + ".InsertDoc",
+        pre: pre,
+        ops: opsList,
+        tags: kInsertTags + additionalTags
+    });
 }
 
 makeInsertTestForDocType("MultipleFieldsAllExcluded",
                          getSetupFunctionWithAllPathsIndex(["nonexistent"]),
-                         getDocGeneratorForTopLevelFields(getNFieldNames(16)));
+                         getDocGeneratorForTopLevelFields(getNFieldNames(16)),
+                         ["regression"]);
 makeInsertTestForDocType("AllDiffFields",
                          getSetupFunctionWithAllPathsIndex([]),
-                         getDocGeneratorForUniqueLeaves(getNFieldNames(200)));
+                         getDocGeneratorForUniqueLeaves(getNFieldNames(200)),
+                         ["regression"]);
 makeInsertTestForDocType("DeeplyNested",
                          getSetupFunctionWithAllPathsIndex([]),
                          getDocGeneratorForDeeplyNestedFields(
-                             getNFieldNames(200), NUMBER_FOR_RANGE, NUMBER_FOR_RANGE - 1));
+                             getNFieldNames(200), NUMBER_FOR_RANGE, NUMBER_FOR_RANGE - 1),
+                         ["regression"]);
 
 // Comparison tests which use a standard index.
 
