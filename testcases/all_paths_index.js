@@ -199,7 +199,7 @@ function getSetupFunctionForTargetedIndex(fieldsToIndex) {
 
 /**
  * Returns a function, which when called, will drop the given collection and create a $** index on
- * 'fieldsToIndex'. If 'fieldsToIndex' is empty, it will create a $** on all fields.
+ * 'fieldsToIndex'. If 'fieldsToIndex' is empty, it will create a $** index on all fields.
  */
 function getSetupFunctionWithAllPathsIndex(fieldsToIndex) {
     return function(collection) {
