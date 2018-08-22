@@ -47,7 +47,7 @@ function setDottedFieldToValue(object, path, value) {
 function addTest(options) {
     tests.push({
         name: options.type + ".AllPathsIndex." + options.name,
-        tags: ["all_paths", "indexed"].concat(options.tags),
+        tags: ["insert", "all_paths", "indexed"].concat(options.tags),
         pre: options.pre,
         ops: options.ops
     });
