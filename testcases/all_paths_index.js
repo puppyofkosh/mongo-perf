@@ -47,7 +47,7 @@ function setDottedFieldToValue(object, path, value) {
 function addTest(options) {
     tests.push({
         name: options.type + ".AllPathsIndex." + options.name,
-        tags: ["insert", "all_paths", "indexed"].concat(options.tags),
+        tags: ["all_paths", "indexed"].concat(options.tags),
         pre: options.pre,
         ops: options.ops
     });
@@ -237,7 +237,7 @@ function makeInsertTestForDocType(name, pre, documentGenerator, additionalTags) 
         name: name + ".InsertDoc",
         pre: pre,
         ops: opsList,
-        tags: kInsertTags + additionalTags
+        tags: kInsertTags.concat(additionalTags)
     });
 }
 
@@ -260,10 +260,12 @@ makeInsertTestForDocType("DeeplyNested",
 function makeComparisonWriteTest(name, fieldsToIndex, documentGenerator) {
     makeInsertTestForDocType(name + ".AllPathsIndex",
                              getSetupFunctionWithAllPathsIndex(fieldsToIndex),
-                             documentGenerator);
+                             documentGenerator,
+                            ["core"]);
     makeInsertTestForDocType(name + ".StandardIndex",
                              getSetupFunctionForTargetedIndex(fieldsToIndex),
-                             documentGenerator);
+                             documentGenerator,
+                            ["core"]);
 }
 
 for (var i = 1; i <= 16; i *= 2) {
