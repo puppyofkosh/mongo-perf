@@ -7,25 +7,22 @@ if ((typeof tests === "undefined" ? "undefined" : typeof(tests)) != "object") {
 
 /*
  * Inserts value at the location specified by path (using dot notation) in object.
- * If there's a common non-object field name this function overrites the previous values.
+ * If there's a common non-object field name this function overwrites the previous values.
  */
 function setDottedFieldToValue(object, path, value) {
-    if (path != undefined) {
+    if (typeof path === "string") {
         var fields = path.split(".");
         if (fields.length == 1) {
             object[path] = value;
-            return object;
         } else {
             if (typeof(object[fields[0]]) !== "object") {
                 object[fields[0]] = {};
             }
             setDottedFieldToValue(
                 object[fields[0]], path.slice(fields[0].length + 1, path.length), value);
-            return object;
         }
-    } else {
-        return object;
     }
+    return object;
 }
 
 /**
@@ -261,15 +258,15 @@ function makeComparisonWriteTest(name, fieldsToIndex, documentGenerator) {
     makeInsertTestForDocType(name + ".AllPathsIndex",
                              getSetupFunctionWithAllPathsIndex(fieldsToIndex),
                              documentGenerator,
-                            ["core"]);
+                             ["core"]);
     makeInsertTestForDocType(name + ".StandardIndex",
                              getSetupFunctionForTargetedIndex(fieldsToIndex),
                              documentGenerator,
-                            ["core"]);
+                             ["core"]);
 }
 
 for (var i = 1; i <= 16; i *= 2) {
     var fieldNameArr = getNFieldNames(i);
-    var name = "TopLevelField" + (i > 1 ? "s" : "") + "-" + i;
+    var name = "TopLevelFields-" + i;
     makeComparisonWriteTest(name, fieldNameArr, getDocGeneratorForTopLevelFields(fieldNameArr));
 }
