@@ -238,6 +238,7 @@ def main():
         got_results = False
         line_results = ""
         for line in iter(mongo_proc.stdout.readline, ''):
+            print(line)
             line = line.strip()
             if line == "@@@START@@@":
                 readout = True
